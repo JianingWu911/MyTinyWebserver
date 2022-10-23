@@ -89,7 +89,7 @@ public:
     static int m_user_count;
     MYSQL* mysql; // 为了外面可以 直接访问
     int timer_flag;
-    int improv;
+    int improv; // 
     int m_state;
 
 private:

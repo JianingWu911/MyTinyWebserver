@@ -1,9 +1,10 @@
 #include "./thread_pool.h"
 
 template<typename T>
-Thread_pool<T>::Thread_pool(connection_pool* connPool, 
+Thread_pool<T>::Thread_pool(int actor_mode, connection_pool* connPool, 
                             int pthread_num = 8, 
                             int max_request = 10000) : 
+                            m_actor_model(actor_mode),
                             m_connPool(connPool), 
                             m_pthread_num(pthread_num),
                             max_size(max_request) {
@@ -31,21 +32,35 @@ Thread_pool<T>::Thread_pool(connection_pool* connPool,
 }
 
 template<typename T>
-bool Thread_pool<T>::append(T* request){
+bool Thread_pool<T>::append(T* request, int state){
     m_queuelocker.lock();
     if (m_workqueue.size() > max_size) {
         m_queuelocker.unlock();
         return false;
     }
-    /*******************为什么要先设置状态*******************/
+    /*读写要分开，所以设置状态，读为0，写为1*/
+    request->state = state;
     m_workqueue.push_back(request);
     m_queuelocker.unlock();
     // 信号量用post发布
     m_queuestat.post();
     return true;
 }
-/**************************没写append_p版本*******************************************/
-
+/*append_p版本， 用于proactor，直接处理*/
+template<typename T>
+bool Thread_pool<T>::append_p(T* request){
+    m_queuelocker.lock();
+    if (m_workqueue.size() > max_size) {
+        m_queuelocker.unlock();
+        return false;
+    }
+    /*proactor 不用设置读写的状态*/
+    m_workqueue.push_back(request);
+    m_queuelocker.unlock();
+    // 信号量用post发布
+    m_queuestat.post();
+    return true;
+}
 template<typename T>
 void* Thread_pool<T>::worker(void* arg) { 
     // 传入的参数就是无类型的指针，需要进行转换
@@ -55,7 +70,7 @@ void* Thread_pool<T>::worker(void* arg) {
 }
 template<typename T>
 void Thread_pool<T>::run() {
-    while (!m_stop) {
+    while (1) {
         m_queuestat.wait();
         m_queuelocker.lock();
         if (m_workqueue.empty()) {
@@ -66,9 +81,35 @@ void Thread_pool<T>::run() {
         m_workqueue.pop_front();
         m_queuelocker.unlock();
         if (request == nullptr) continue;
-/************************简略,修改*********************************/
-        request->mysql = m_connPool->GetConnection();
-        request->process();
-        m_connPool->ReleaseConnection(request->mysql);
+        // reactor 模型，根据m_state来确定是读还是写，需要先读取，然后再处理
+        if (1 == m_actor_model) {
+            if (0 == request->m_state) { // 0代表读
+                if (request->read_once()) {
+                    /* *********************什么作用:读完就设置为1，无论成功与否*/
+                    request->improv = 1;
+                    connectionRAII mysqlcon(&request->mysql, m_connPool);
+                    request->process();
+                }
+                else {
+                    request->improv = 1;
+                    /*****************什么用？成功了设置为1，后面用来更新时间*/
+                    request->timer_flag = 1;
+                }
+            }
+            else {
+                if (request->write() ) {
+                    request->improv = 1;
+                }
+                else {
+                    request->improv = 1;
+                    request->timer_flag = 1;
+                }
+            }
+        }
+        // proactor 模型，已经读取好了，直接处理
+        else {
+            connectionRAII mysqlcon(&request->mysql, m_connPool);
+            request->process();
+        }
     }
 }

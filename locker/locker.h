@@ -2,6 +2,8 @@
 # include<iostream>
 # include<string.h>
 # include<pthread.h>
+#include <exception>
+
 
 
 class sem {
@@ -66,3 +68,31 @@ public:
 private:
     pthread_mutex_t m_mutex;
 };
+
+class Cond {
+private:
+    pthread_cond_t m_cond;
+
+public:
+    Cond() {
+        if (pthread_cond_init(&m_cond, NULL)) { // 成功返回0
+            throw std::exception();
+        }
+    }
+    ~Cond() {
+        pthread_cond_destroy(&m_cond);
+    }
+    bool wait(pthread_mutex_t* mutex) {
+        /********************************* 为什么这个上锁不用了*/
+        // pthread_mutex_lock(mutex);
+        return pthread_cond_wait(&m_cond, mutex) == 0;
+    }
+    /****************************timewait()没有写*/
+    bool signal () {
+        return pthread_cond_signal(&m_cond) == 0;
+    }
+    bool broadcast() {
+        return pthread_cond_broadcast(&m_cond) == 0;
+    }
+};
+

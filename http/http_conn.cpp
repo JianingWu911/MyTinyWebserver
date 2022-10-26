@@ -170,37 +170,36 @@ Http_conn::HTTP_CODE Http_conn:: process_read(){
     /*注意 || 前面的line_status == LINE_OK 是为了当解析完content，然后修改line_status 为 LINE_OPEN，进而跳出循环*/
     while ((m_check_state == CHECK_STATE_CONTENT && line_status == LINE_OK) 
             || (line_status = parse_line()) == LINE_OK) {
-                text = get_line();
-                // 将m_start_line更新为刚读取的parse_line结尾的字节，正好是下一行的额开始
-                m_start_line = m_checked_idx;
-                switch(m_check_state) {
-                    case CHECK_STATE_REQUESTLINE:
-                        ret = parse_request_line(text);
-                        if (BAD_REQUEST == ret) return BAD_REQUEST;
-                        break;
-                    case CHECK_STATE_HEADER:
-                        ret = parse_headers(text);
-                        if (BAD_REQUEST == ret) return BAD_REQUEST;
-                        // 若是get请求，就直接处理
-                        else if (GET_REQUEST == ret) {
-                            return do_request();
-                        }
-                        break;
-                    case CHECK_STATE_CONTENT:
-                        ret = parse_content(text);
-                        // parse_content()不会返回BAD_REQUEST,所以不用判断
-                        // if (BAD_REQUEST == ret) return BAD_REQUEST;
-                        // 如果解析内容得到GET_REQUEST,就去处理
-                        if (GET_REQUEST == ret) {
-                            return do_request();
-                        }
-                        // 跳出循环
-                        m_check_state = LINE_OPEN;
-                        break;
-                    default:
-                        return INTERNAL_ERROR;
-
-                } 
+        text = get_line();
+        // 将m_start_line更新为刚读取的parse_line结尾的字节，正好是下一行的额开始
+        m_start_line = m_checked_idx;
+        switch(m_check_state) {
+            case CHECK_STATE_REQUESTLINE:
+                ret = parse_request_line(text);
+                if (BAD_REQUEST == ret) return BAD_REQUEST;
+                break;
+            case CHECK_STATE_HEADER:
+                ret = parse_headers(text);
+                if (BAD_REQUEST == ret) return BAD_REQUEST;
+                // 若是get请求，就直接处理
+                else if (GET_REQUEST == ret) {
+                    return do_request();
+                }
+                break;
+            case CHECK_STATE_CONTENT:
+                ret = parse_content(text);
+                // parse_content()不会返回BAD_REQUEST,所以不用判断
+                // if (BAD_REQUEST == ret) return BAD_REQUEST;
+                // 如果解析内容得到GET_REQUEST,就去处理
+                if (GET_REQUEST == ret) {
+                    return do_request();
+                }
+                // 跳出循环
+                m_check_state = LINE_OPEN;
+                break;
+            default:
+                return INTERNAL_ERROR;
+        } 
     }
 }
 

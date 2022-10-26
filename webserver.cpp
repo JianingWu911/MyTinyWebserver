@@ -213,7 +213,7 @@ bool WebServer::dealwithsignal(bool& timeout, bool& stop_server) {
     ret = recv(m_pipefd[0], signals, sizeof(signals), 0);
     if (0 >= ret) return false;
     for (int i = 0; i < ret; ++i) {
-        switch (signals[i]) {
+        switch (signals[i]) { // 从char 到int有一个类型转换
             case SIGALRM :
                 timeout = true;
                 break;
